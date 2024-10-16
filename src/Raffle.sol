@@ -42,6 +42,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
     /* Events */
     event RaffleEntered(address indexed player);
     event WinnerPicked(address indexed winner);
+    event RequestedRaffleWinner(uint256 indexed requestId);
 
     constructor(
         uint256 entranceFee,
@@ -104,26 +105,9 @@ contract Raffle is VRFConsumerBaseV2Plus {
             // Set nativePayment to true to pay for VRF requests with Sepolia ETH instead of LINK
             extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false}))
         });
-        s_vrfCoordinator.requestRandomWords(request);
+        uint256 requestId = s_vrfCoordinator.requestRandomWords(request);
+        emit RequestedRaffleWinner(requestId);
     }
-
-    // //选中获胜者
-    // function pickWinner() external {
-    //     if ((block.timestamp - s_lastTimeStamp) < i_interval) {
-    //         revert();
-    //     }
-    //     s_raffleState = RaffleState.CALCULATING;
-    //     VRFV2PlusClient.RandomWordsRequest memory request = VRFV2PlusClient.RandomWordsRequest({
-    //         keyHash: i_keyHash,
-    //         subId: i_subscriptionId,
-    //         requestConfirmations: REQUEST_CONFIRMATIONS,
-    //         callbackGasLimit: i_callbackGasLimit,
-    //         numWords: NUM_WORDS,
-    //         // Set nativePayment to true to pay for VRF requests with Sepolia ETH instead of LINK
-    //         extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false}))
-    //     });
-    //     uint256 requestId = s_vrfCoordinator.requestRandomWords(request);
-    // }
 
     /**
      * Getter Functions
@@ -138,6 +122,10 @@ contract Raffle is VRFConsumerBaseV2Plus {
 
     function getPlayer(uint256 indexOfPlayer) external view returns (address) {
         return s_players[indexOfPlayer];
+    }
+
+    function getRecentWinner() external view returns (address) {
+        return s_recentWinner;
     }
 
     //抽奖的逻辑就写在这里面
