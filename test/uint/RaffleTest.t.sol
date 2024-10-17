@@ -4,10 +4,11 @@ pragma solidity 0.8.19;
 import {Test, console} from "forge-std/Test.sol";
 import {DeployRaffle} from "script/DeployRaffle.s.sol";
 import {Raffle} from "src/Raffle.sol";
-import {HelperConfig} from "script/HelperConfig.s.sol";
+import {HelperConfig, CodeConstants} from "script/HelperConfig.s.sol";
 import {Vm} from "forge-std/Vm.sol";
+import {VRFCoordinatorV2_5Mock} from "@chainlink/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
 
-contract RaffleTest is Test {
+contract RaffleTest is Test, CodeConstants {
     event RaffleEntered(address indexed player);
     event WinnerPicked(address indexed winner);
 
@@ -173,5 +174,65 @@ contract RaffleTest is Test {
         Raffle.RaffleState raffleState = raffle.getRaffleState();
         assert(uint256(requestId) > 0);
         assert(uint256(raffleState) == 1);
+    }
+
+    /**
+     * FULFILLRANDOMWORDS*********************************
+     */
+    //这里用了模糊测试,foundry实际用了不同的数量
+    function testFulfillrandomWordsCanOnlyBeCalledAfterPerformUpkeep(uint256 randomRequestId)
+        public
+        raffleEntered
+        skipFork
+    {
+        vm.expectRevert(VRFCoordinatorV2_5Mock.InvalidRequest.selector);
+        VRFCoordinatorV2_5Mock(vrfCoordinator).fulfillRandomWords(randomRequestId, address(raffle));
+    }
+
+    modifier skipFork() {
+        if (block.chainid != LOCAL_CHAIN_ID) {
+            return;
+        }
+        _;
+    }
+
+    function testFulfillrandomWordsPicksAWinnerResetAndSendsMoney() public raffleEntered skipFork {
+        //总共四个人进入
+        uint256 additionalEntrants = 3;
+        uint256 startingIndex = 1;
+        address expectWinner = address(1);
+        //添加了三个抽奖的用户
+        for (uint256 i = startingIndex; i < additionalEntrants + startingIndex; i++) {
+            address newPlayer = address(uint160(i));
+            //不仅给了钱,还修改了下一个交易的发送对象为自身
+            hoax(newPlayer, 1 ether);
+            raffle.enterRaffle{value: entranceFee}();
+        }
+        uint256 startingTimeStamp = raffle.getLastTimeStamp();
+        uint256 winnerStartingBalance = expectWinner.balance;
+
+        vm.recordLogs();
+        raffle.performUpkeep("");
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        bytes32 requestId = entries[1].topics[1];
+
+        /**
+         * 接下来就是手动调用mock合约的fullfillrandomwords,因为这不是真实网络
+         * 所以需要手动调用,但是他会根据consumer合约来自动回调
+         *
+         */
+        // vm.deal(vrfCoordinator, 10 ether);
+        VRFCoordinatorV2_5Mock(vrfCoordinator).fulfillRandomWords(uint256(requestId), address(raffle));
+
+        address recentWinner = raffle.getRecentWinner();
+        Raffle.RaffleState rafflestate = raffle.getRaffleState();
+        uint256 winnerBalance = recentWinner.balance;
+        uint256 endingTimeStamp = raffle.getLastTimeStamp();
+        uint256 prize = entranceFee * (additionalEntrants + 1);
+
+        assert(recentWinner == expectWinner);
+        assert(rafflestate == Raffle.RaffleState.OPEN);
+        assert(winnerBalance == winnerStartingBalance + prize);
+        assert(endingTimeStamp > startingTimeStamp);
     }
 }

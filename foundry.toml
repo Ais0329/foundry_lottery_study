@@ -14,4 +14,9 @@ fs_permissions = [
     { access = "read", path = "./reports" },
 ]
 
+# 模糊测试的配置
+[fuzz]
+# 执行1000次
+runs = 1000
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
