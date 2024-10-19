@@ -40,7 +40,7 @@ contract RaffleTest is Test, CodeConstants {
     }
 
     function testRaffleInitializesInOpenState() public view {
-        assert(raffle.getRaffleState() == Raffle.RaffleState.OPEN);
+        assert(uint256(raffle.getRaffleState()) == 0);
     }
 
     function testRaffleRevertsWhenYouDontpayEnough() public {
